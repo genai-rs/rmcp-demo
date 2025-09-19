@@ -37,7 +37,9 @@ cd rmcp-demo
 2. Copy the environment file and configure:
 ```bash
 cp .env.example .env
-# Edit .env with your Langfuse credentials
+# Edit .env with your Langfuse credentials and server URL
+# For Langfuse Cloud, use: LANGFUSE_HOST=https://cloud.langfuse.com
+# For external server, use your server's URL
 ```
 
 3. Build the Rust backend:
