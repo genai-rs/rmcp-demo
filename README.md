@@ -163,9 +163,10 @@ cargo build --release
 
 ## Architecture Decisions
 
+- **rmcp**: Official Rust MCP SDK with HTTP transport support via StreamableHttpService
 - **Axum**: High-performance async web framework for the HTTP server
 - **Tower**: Middleware for CORS and other HTTP concerns
-- **OpenTelemetry SDK**: Direct integration for maximum control over tracing
+- **OpenTelemetry SDK**: Direct integration with SimpleSpanProcessor for synchronous export
 - **Langfuse Exporter**: Native Rust implementation for LLM observability
 
 ## Comparison with Python Implementation
