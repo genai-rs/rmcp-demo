@@ -22,7 +22,8 @@ The project contains:
 ### Prerequisites
 
 - Rust (latest stable)
-- Python 3.10+
+- Python 3.10+ (managed via `uv`)
+- [uv](https://github.com/astral-sh/uv) - Fast Python package installer and resolver
 - Langfuse instance (local or cloud)
 
 ### Installation
@@ -44,9 +45,17 @@ cp .env.example .env
 cargo build --release
 ```
 
-4. Install Python dependencies:
+4. Install Python dependencies with uv:
 ```bash
-pip install -e .
+# Install uv if you haven't already
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Create virtual environment and install dependencies
+uv venv
+uv pip install -e .
+
+# Or simply use uv sync if you want to sync with lock file
+uv sync
 ```
 
 ## Running
@@ -62,13 +71,24 @@ The server will start on `http://localhost:8001/weather`
 ### Start the Python Client
 
 ```bash
+# Using uv run
+uv run streamlit run weather_assistant/client.py
+
+# Or activate the virtual environment first
+source .venv/bin/activate  # On Unix/macOS
+# or
+.venv\Scripts\activate     # On Windows
 streamlit run weather_assistant/client.py
 ```
 
 ### (Optional) Start the Python MCP Server
 
 ```bash
-python -m weather_assistant.server
+# Using uv run
+uv run weather-server
+
+# Or using module directly
+uv run python -m weather_assistant.server
 ```
 
 The Python server will start on `http://localhost:8000/weather`
@@ -102,15 +122,32 @@ The server implements the MCP protocol with:
 
 ## Development
 
-### Running Tests
+### Python Development with uv
 
 ```bash
-cargo test
+# Install development dependencies
+uv pip install -e ".[dev]"
+
+# Run linting
+uv run ruff check .
+
+# Run type checking
+uv run mypy weather_assistant
+
+# Run Python tests
+uv run pytest
 ```
 
-### Building for Production
+### Rust Development
 
 ```bash
+# Run tests
+cargo test
+
+# Run with verbose output
+cargo run --verbose
+
+# Build for production
 cargo build --release
 ```
 

@@ -72,7 +72,12 @@ async def get_forecast(
     return forecast
 
 
-if __name__ == "__main__":
+def main():
+    """Main entry point for the server."""
     print("Starting Weather Assistant MCP Server on http://0.0.0.0:8000")
     print("Streamable HTTP endpoint available at http://localhost:8000/weather")
     mcp.run(transport="streamable-http", host="0.0.0.0", port=8000, path="/weather")
+
+
+if __name__ == "__main__":
+    main()
