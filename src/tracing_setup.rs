@@ -38,7 +38,8 @@ pub fn init_tracing() -> Result<()> {
             .with_timeout(Duration::from_secs(10))
             .build()?;
 
-        builder = builder.with_batch_exporter(exporter);
+        // Use SimpleSpanProcessor instead of BatchSpanProcessor to avoid runtime issues
+        builder = builder.with_simple_exporter(exporter);
     }
 
     let provider = builder.build();
