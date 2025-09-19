@@ -1,10 +1,10 @@
-# Rust MCP Demo with OpenTelemetry and Langfuse
+# Rust MCP HTTP Server with OpenTelemetry and Langfuse
 
-This repository demonstrates a Rust implementation of an MCP (Model Context Protocol) server with distributed tracing using OpenTelemetry and Langfuse.
+This repository demonstrates a Rust implementation of an MCP (Model Context Protocol) HTTP server with distributed tracing using OpenTelemetry and Langfuse, designed to work with FastMCP Python clients.
 
 ## Features
 
-- 🦀 **Rust MCP Server**: Built with the official MCP Rust SDK
+- 🦀 **Rust MCP HTTP Server**: JSON-RPC implementation compatible with FastMCP clients
 - 🔍 **Distributed Tracing**: OpenTelemetry integration for trace propagation
 - 📊 **Langfuse Integration**: LLM observability with token usage and latency tracking
 - 🎨 **Streamlit Frontend**: Python client application (from the original implementation)
@@ -13,9 +13,17 @@ This repository demonstrates a Rust implementation of an MCP (Model Context Prot
 ## Architecture
 
 The project contains:
-- **Rust Backend** (`src/`): MCP server implementation on port 8001
-- **Python Frontend** (`weather_assistant/`): Streamlit client application
-- **Python Backend** (`weather_assistant/server.py`): Original Python MCP server on port 8000
+- **Rust Backend** (`src/`): HTTP-based MCP server with JSON-RPC protocol on port 8001
+- **Python Frontend** (`weather_assistant/`): Streamlit client application using FastMCP
+- **Python Backend** (`weather_assistant/server.py`): Reference Python MCP server on port 8000 (optional)
+
+### Why HTTP instead of stdio?
+
+The official `rmcp` crate is designed for stdio-based communication, which works well for local tool integration. However, this project uses HTTP transport to:
+- Work seamlessly with FastMCP Python clients
+- Enable distributed tracing across network boundaries
+- Support web-based clients like Streamlit
+- Allow proper trace context propagation via HTTP headers
 
 ## Setup
 
