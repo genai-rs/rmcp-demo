@@ -9,7 +9,8 @@ use axum::{
 use dotenv::dotenv;
 use opentelemetry::trace::{FutureExt, TraceContextExt};
 use opentelemetry::{global, propagation::Extractor, trace::Tracer};
-use serde_json::json;
+use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 use tracing::{error, info, instrument};
@@ -36,6 +37,33 @@ impl<'a> Extractor for HeaderMapExtractor<'a> {
     fn keys(&self) -> Vec<&str> {
         self.0.keys().map(|k| k.as_str()).collect()
     }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct JsonRpcRequest {
+    jsonrpc: String,
+    method: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    params: Option<Value>,
+    id: Value,
+}
+
+#[derive(Debug, Serialize)]
+struct JsonRpcResponse {
+    jsonrpc: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    result: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<JsonRpcError>,
+    id: Value,
+}
+
+#[derive(Debug, Serialize)]
+struct JsonRpcError {
+    code: i32,
+    message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    data: Option<Value>,
 }
 
 #[tokio::main]
@@ -72,7 +100,7 @@ async fn main() -> Result<()> {
 async fn handle_mcp_request(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Json(payload): Json<serde_json::Value>,
+    Json(payload): Json<Value>,
 ) -> impl IntoResponse {
     let parent_context = global::get_text_map_propagator(|propagator| {
         propagator.extract(&HeaderMapExtractor(&headers))
@@ -82,126 +110,175 @@ async fn handle_mcp_request(
     let cx = parent_context.with_span(span);
 
     async move {
-        match process_mcp_call(&state, payload).await {
-            Ok(response) => (StatusCode::OK, Json(response)),
+        // Try to parse as JSON-RPC request
+        let request: JsonRpcRequest = match serde_json::from_value(payload) {
+            Ok(req) => req,
             Err(e) => {
-                error!("Error processing MCP request: {}", e);
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
+                error!("Failed to parse JSON-RPC request: {}", e);
+                return (
+                    StatusCode::OK,
                     Json(json!({
-                        "error": format!("Failed to process request: {}", e)
-                    })),
-                )
+                        "jsonrpc": "2.0",
+                        "error": {
+                            "code": -32700,
+                            "message": "Parse error",
+                            "data": format!("{}", e)
+                        },
+                        "id": null
+                    }))
+                );
             }
-        }
+        };
+
+        let response = process_json_rpc_request(&state, request).await;
+        (StatusCode::OK, Json(serde_json::to_value(response).unwrap()))
     }
     .with_context(cx)
     .await
 }
 
-async fn process_mcp_call(state: &AppState, payload: serde_json::Value) -> Result<serde_json::Value> {
-    if let Some(method) = payload.get("method").and_then(|m| m.as_str()) {
-        match method {
-            "tools/call" => {
-                if let Some(name) = payload.get("params")
-                    .and_then(|p| p.get("name"))
-                    .and_then(|n| n.as_str())
-                {
-                    let args = payload.get("params")
-                        .and_then(|p| p.get("arguments"))
-                        .cloned()
-                        .unwrap_or_else(|| json!({}));
-
-                    match name {
-                        "get_weather" => {
-                            let location = args.get("location")
-                                .and_then(|l| l.as_str())
-                                .unwrap_or("Unknown");
-
-                            let weather = state.weather_service.get_weather(location).await?;
-                            Ok(json!({
-                                "content": [
-                                    {
-                                        "type": "text",
-                                        "text": serde_json::to_string(&weather)?
-                                    }
-                                ]
-                            }))
-                        }
-                        "get_forecast" => {
-                            let location = args.get("location")
-                                .and_then(|l| l.as_str())
-                                .unwrap_or("Unknown");
-                            let days = args.get("days")
-                                .and_then(|d| d.as_u64())
-                                .unwrap_or(3) as usize;
-
-                            let forecast = state.weather_service.get_forecast(location, days).await?;
-                            Ok(json!({
-                                "content": [
-                                    {
-                                        "type": "text",
-                                        "text": serde_json::to_string(&forecast)?
-                                    }
-                                ]
-                            }))
-                        }
-                        _ => Ok(json!({
-                            "error": format!("Unknown tool: {}", name)
-                        }))
+async fn process_json_rpc_request(state: &AppState, request: JsonRpcRequest) -> JsonRpcResponse {
+    let result = match request.method.as_str() {
+        "initialize" => {
+            json!({
+                "protocolVersion": "0.1.0",
+                "capabilities": {
+                    "tools": {
+                        "listChanged": false
                     }
-                } else {
-                    Ok(json!({
-                        "error": "Tool name not provided"
-                    }))
+                },
+                "serverInfo": {
+                    "name": "weather-assistant-rust",
+                    "version": "1.0.0"
+                }
+            })
+        }
+        "initialized" => {
+            json!({})
+        }
+        "tools/list" => {
+            json!({
+                "tools": [
+                    {
+                        "name": "get_weather",
+                        "description": "Get current weather for a specified location",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "location": {
+                                    "type": "string",
+                                    "description": "City name to get weather for"
+                                }
+                            },
+                            "required": ["location"]
+                        }
+                    },
+                    {
+                        "name": "get_forecast",
+                        "description": "Get weather forecast for the specified location and number of days",
+                        "inputSchema": {
+                            "type": "object",
+                            "properties": {
+                                "location": {
+                                    "type": "string",
+                                    "description": "City name for forecast"
+                                },
+                                "days": {
+                                    "type": "number",
+                                    "description": "Number of days to forecast (1-7)",
+                                    "default": 3
+                                }
+                            },
+                            "required": ["location"]
+                        }
+                    }
+                ]
+            })
+        }
+        "tools/call" => {
+            match handle_tool_call(state, request.params).await {
+                Ok(result) => result,
+                Err(e) => {
+                    return JsonRpcResponse {
+                        jsonrpc: "2.0".to_string(),
+                        result: None,
+                        error: Some(JsonRpcError {
+                            code: -32603,
+                            message: format!("Internal error: {}", e),
+                            data: None,
+                        }),
+                        id: request.id,
+                    };
                 }
             }
-            "tools/list" => {
-                Ok(json!({
-                    "tools": [
-                        {
-                            "name": "get_weather",
-                            "description": "Get current weather for a specified location",
-                            "inputSchema": {
-                                "type": "object",
-                                "properties": {
-                                    "location": {
-                                        "type": "string",
-                                        "description": "City name to get weather for"
-                                    }
-                                },
-                                "required": ["location"]
-                            }
-                        },
-                        {
-                            "name": "get_forecast",
-                            "description": "Get weather forecast for the specified location and number of days",
-                            "inputSchema": {
-                                "type": "object",
-                                "properties": {
-                                    "location": {
-                                        "type": "string",
-                                        "description": "City name for forecast"
-                                    },
-                                    "days": {
-                                        "type": "number",
-                                        "description": "Number of days to forecast (1-7)",
-                                        "default": 3
-                                    }
-                                },
-                                "required": ["location"]
-                            }
-                        }
-                    ]
-                }))
-            }
-            _ => Ok(json!({
-                "error": format!("Unknown method: {}", method)
+        }
+        _ => {
+            return JsonRpcResponse {
+                jsonrpc: "2.0".to_string(),
+                result: None,
+                error: Some(JsonRpcError {
+                    code: -32601,
+                    message: format!("Method not found: {}", request.method),
+                    data: None,
+                }),
+                id: request.id,
+            };
+        }
+    };
+
+    JsonRpcResponse {
+        jsonrpc: "2.0".to_string(),
+        result: Some(result),
+        error: None,
+        id: request.id,
+    }
+}
+
+async fn handle_tool_call(state: &AppState, params: Option<Value>) -> Result<Value> {
+    let params = params.ok_or_else(|| anyhow::anyhow!("Missing params for tool call"))?;
+
+    let name = params.get("name")
+        .and_then(|n| n.as_str())
+        .ok_or_else(|| anyhow::anyhow!("Missing tool name"))?;
+
+    let args = params.get("arguments")
+        .cloned()
+        .unwrap_or_else(|| json!({}));
+
+    match name {
+        "get_weather" => {
+            let location = args.get("location")
+                .and_then(|l| l.as_str())
+                .unwrap_or("Unknown");
+
+            let weather = state.weather_service.get_weather(location).await?;
+            Ok(json!({
+                "content": [
+                    {
+                        "type": "text",
+                        "text": serde_json::to_string(&weather)?
+                    }
+                ]
             }))
         }
-    } else {
-        Ok(json!({
-            "error": "Method not provided"
-        }))
+        "get_forecast" => {
+            let location = args.get("location")
+                .and_then(|l| l.as_str())
+                .unwrap_or("Unknown");
+            let days = args.get("days")
+                .and_then(|d| d.as_u64())
+                .unwrap_or(3) as usize;
+
+            let forecast = state.weather_service.get_forecast(location, days).await?;
+            Ok(json!({
+                "content": [
+                    {
+                        "type": "text",
+                        "text": serde_json::to_string(&forecast)?
+                    }
+                ]
+            }))
+        }
+        _ => Err(anyhow::anyhow!("Unknown tool: {}", name))
     }
 }

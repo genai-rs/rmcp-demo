@@ -19,15 +19,15 @@ tracer = trace.get_tracer(__name__)
 
 
 @observe
-async def handle_weather_request(location: str, forecast_days: int = 3, backend: str = "Python"):
+async def handle_weather_request(location: str, forecast_days: int = 3):
     """Handle weather request with distributed tracing."""
 
     # Prepare carrier for context propagation
     carrier: dict[str, str] = {}
     inject(carrier)
 
-    # Choose backend URL based on selection
-    backend_url = "http://localhost:8001/weather" if backend == "Rust" else "http://localhost:8000/weather"
+    # Connect to Rust MCP server
+    backend_url = "http://localhost:8001/weather"
 
     # Create transport with trace context headers
     transport = StreamableHttpTransport(url=backend_url, headers=carrier)
@@ -46,9 +46,7 @@ async def handle_weather_request(location: str, forecast_days: int = 3, backend:
 
 # Streamlit UI
 st.title("🌤️ Weather Assistant")
-
-# Backend selection
-backend = st.selectbox("Select Backend:", ["Python", "Rust"])
+st.caption("Connected to Rust MCP Server on port 8001")
 
 # User input
 location = st.text_input("Enter city name:", "San Francisco")
@@ -60,13 +58,12 @@ if st.button("Get Weather"):
         with tracer.start_as_current_span("weather_request") as span:
             span.set_attribute("location", location)
             span.set_attribute("forecast_days", forecast_days)
-            span.set_attribute("backend", backend)
 
             try:
                 import asyncio
 
                 # Run the async function
-                weather, forecast = asyncio.run(handle_weather_request(location, forecast_days, backend))
+                weather, forecast = asyncio.run(handle_weather_request(location, forecast_days))
 
                 # Handle FastMCP response format
                 if isinstance(weather, list) and weather:

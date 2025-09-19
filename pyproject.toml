@@ -51,3 +51,6 @@ select = [
 
 [tool.ruff.isort]
 known-first-party = ["weather_assistant"]
+
+[dependency-groups]
+dev = []
