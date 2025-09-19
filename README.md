@@ -29,7 +29,7 @@ The project contains:
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/timvw/rmcp-demo
+git clone https://github.com/genai-rs/rmcp-demo
 cd rmcp-demo
 ```
 
