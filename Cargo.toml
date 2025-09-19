@@ -4,11 +4,14 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+# MCP SDK with HTTP transport support
+rmcp = { git = "https://github.com/modelcontextprotocol/rust-sdk", branch = "main", features = ["server", "transport-streamable-http-server"] }
+schemars = "0.8"
 
 # Async runtime
 tokio = { version = "1", features = ["full"] }
 
-# HTTP server
+# HTTP server (required for rmcp streamable http)
 axum = { version = "0.7", features = ["macros"] }
 tower = "0.5"
 tower-http = { version = "0.6", features = ["cors", "trace"] }
