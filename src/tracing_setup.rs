@@ -24,7 +24,9 @@ pub fn init_tracing() -> Result<()> {
 
     let langfuse_public_key = env::var("LANGFUSE_PUBLIC_KEY").ok();
     let langfuse_secret_key = env::var("LANGFUSE_SECRET_KEY").ok();
-    let langfuse_host = env::var("LANGFUSE_HOST").unwrap_or_else(|_| "http://localhost:3000".to_string());
+    let langfuse_host = env::var("LANGFUSE_HOST")
+        .or_else(|_| env::var("LANGFUSE_BASE_URL"))
+        .unwrap_or_else(|_| "http://localhost:3000".to_string());
 
     let mut builder = SdkTracerProvider::builder()
         .with_sampler(Sampler::AlwaysOn)
