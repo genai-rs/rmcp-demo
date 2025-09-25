@@ -53,4 +53,6 @@ select = [
 known-first-party = ["weather_assistant"]
 
 [dependency-groups]
-dev = []
+dev = [
+    "watchdog>=6.0.0",
+]

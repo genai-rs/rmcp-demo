@@ -10,6 +10,32 @@ from opentelemetry.propagate import inject
 
 from weather_assistant.config.tracing import setup_tracing
 
+
+def extract_payload(result):
+    """Normalize CallToolResult-like responses into plain Python data."""
+    if result is None:
+        return None
+
+    structured = getattr(result, "structured_content", None)
+    if structured:
+        return structured
+
+    content = getattr(result, "content", None)
+    if content:
+        first = content[0] if len(content) > 0 else None
+        if first is None:
+            return []
+        if hasattr(first, "text") and first.text is not None:
+            import json
+
+            try:
+                return json.loads(first.text)
+            except json.JSONDecodeError:
+                return first.text
+        return first
+
+    return result
+
 # Load environment variables
 load_dotenv()
 
@@ -65,16 +91,11 @@ if st.button("Get Weather"):
                 # Run the async function
                 weather, forecast = asyncio.run(handle_weather_request(location, forecast_days))
 
-                # Handle FastMCP response format
-                if isinstance(weather, list) and weather:
-                    # FastMCP returns tool responses as a list of content objects
-                    weather_data = weather[0]
-                    if hasattr(weather_data, "text"):
-                        import json
+                weather_data = extract_payload(weather) or {}
+                if isinstance(weather_data, str):
+                    import json
 
-                        weather_data = json.loads(weather_data.text)
-                else:
-                    weather_data = weather
+                    weather_data = json.loads(weather_data)
 
                 # Display current weather
                 st.subheader(f"Current Weather in {location}")
@@ -88,18 +109,16 @@ if st.button("Get Weather"):
 
                 # Display forecast if requested
                 if forecast and forecast_days > 0:
-                    # Handle FastMCP response format for forecast
-                    if isinstance(forecast, list) and forecast:
-                        forecast_data = forecast[0]
-                        if hasattr(forecast_data, "text"):
-                            import json
+                    forecast_data = extract_payload(forecast) or []
 
-                            forecast_data = json.loads(forecast_data.text)
+                    # Accept either {'items': [...]} or raw list
+                    if isinstance(forecast_data, dict) and "items" in forecast_data:
+                        forecast_items = forecast_data["items"]
                     else:
-                        forecast_data = forecast
+                        forecast_items = forecast_data
 
                     st.subheader(f"{forecast_days}-Day Forecast")
-                    for day_forecast in forecast_data:
+                    for day_forecast in forecast_items:
                         with st.expander(f"Day {day_forecast['day']}"):
                             col1, col2, col3 = st.columns(3)
                             with col1:
