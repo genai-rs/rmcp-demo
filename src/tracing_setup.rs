@@ -4,7 +4,7 @@ use opentelemetry_langfuse::exporter_from_env;
 use opentelemetry_sdk::{
     propagation::TraceContextPropagator,
     resource::Resource,
-    runtime::Tokio,
+    runtime::TokioCurrentThread,
     trace::{
         span_processor_with_async_runtime::BatchSpanProcessor as AsyncBatchSpanProcessor,
         BatchConfigBuilder, SdkTracerProvider,
@@ -32,7 +32,7 @@ pub fn init_tracing() -> Result<SdkTracerProvider> {
         .with_scheduled_delay(Duration::from_millis(200))
         .build();
 
-    let span_processor = AsyncBatchSpanProcessor::builder(exporter, Tokio)
+    let span_processor = AsyncBatchSpanProcessor::builder(exporter, TokioCurrentThread)
         .with_batch_config(batch_config)
         .build();
 
