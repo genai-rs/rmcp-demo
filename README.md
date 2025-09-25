@@ -45,9 +45,6 @@ cd rmcp-demo
 2. Copy the environment file and configure:
 ```bash
 cp .env.example .env
-# Edit .env with your Langfuse credentials and server URL
-# For Langfuse Cloud, use: LANGFUSE_HOST=https://cloud.langfuse.com
-# For external server, use your server's URL
 ```
 
 3. Build the Rust backend:
@@ -57,14 +54,6 @@ cargo build --release
 
 4. Install Python dependencies with uv:
 ```bash
-# Install uv if you haven't already
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Create virtual environment and install dependencies
-uv venv
-uv pip install -e .
-
-# Or simply use uv sync if you want to sync with lock file
 uv sync
 ```
 
@@ -81,27 +70,8 @@ The server will start on `http://localhost:8001/weather`
 ### Start the Python Client
 
 ```bash
-# Using uv run
 uv run streamlit run weather_assistant/client.py
-
-# Or activate the virtual environment first
-source .venv/bin/activate  # On Unix/macOS
-# or
-.venv\Scripts\activate     # On Windows
-streamlit run weather_assistant/client.py
 ```
-
-### (Optional) Start the Python MCP Server
-
-```bash
-# Using uv run
-uv run weather-server
-
-# Or using module directly
-uv run python -m weather_assistant.server
-```
-
-The Python server will start on `http://localhost:8000/weather`
 
 ## Configuration
 
@@ -132,22 +102,6 @@ The server implements the MCP protocol with:
 
 ## Development
 
-### Python Development with uv
-
-```bash
-# Install development dependencies
-uv pip install -e ".[dev]"
-
-# Run linting
-uv run ruff check .
-
-# Run type checking
-uv run mypy weather_assistant
-
-# Run Python tests
-uv run pytest
-```
-
 ### Rust Development
 
 ```bash
@@ -168,14 +122,6 @@ cargo build --release
 - **Tower**: Middleware for CORS and other HTTP concerns
 - **OpenTelemetry SDK**: Direct integration with SimpleSpanProcessor for synchronous export
 - **Langfuse Exporter**: Native Rust implementation for LLM observability
-
-## Comparison with Python Implementation
-
-The Rust implementation provides:
-- ⚡ Better performance and lower resource usage
-- 🔒 Memory safety guarantees
-- 🚀 Native async/await with Tokio
-- 📦 Single binary deployment
 
 ## License
 

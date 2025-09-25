@@ -1,64 +1,76 @@
 use anyhow::Result;
-use opentelemetry::{global, trace::TracerProvider, KeyValue};
-use opentelemetry_langfuse::ExporterBuilder;
+use opentelemetry::{global, trace::TracerProvider as _, KeyValue};
+use opentelemetry_langfuse::exporter_from_env;
 use opentelemetry_sdk::{
     propagation::TraceContextPropagator,
-    trace::{RandomIdGenerator, Sampler, SdkTracerProvider},
-    Resource,
+    resource::Resource,
+    runtime::Tokio,
+    trace::{
+        span_processor_with_async_runtime::BatchSpanProcessor as AsyncBatchSpanProcessor,
+        BatchConfigBuilder, SdkTracerProvider,
+    },
 };
-use std::env;
+use opentelemetry_semantic_conventions::resource::{SERVICE_NAME, SERVICE_VERSION};
 use std::time::Duration;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::{
+    fmt::{self, format::FmtSpan, time::UtcTime},
+    layer::SubscriberExt,
+    util::SubscriberInitExt,
+    EnvFilter,
+};
 
-pub fn init_tracing() -> Result<()> {
+/// Initialise tracing so that `tracing` spans (including Tokio runtime spans)
+/// are forwarded to the configured OpenTelemetry exporter and to stdout.
+pub fn init_tracing() -> Result<SdkTracerProvider> {
+    // Ensure trace context propagation (e.g. W3C traceparent headers).
     global::set_text_map_propagator(TraceContextPropagator::new());
 
-    let service_name = env::var("OTEL_SERVICE_NAME").unwrap_or_else(|_| "weather-assistant-rust".to_string());
+    let exporter = exporter_from_env()?;
+
+    let batch_config = BatchConfigBuilder::default()
+        .with_max_queue_size(2048)
+        .with_scheduled_delay(Duration::from_millis(200))
+        .build();
+
+    let span_processor = AsyncBatchSpanProcessor::builder(exporter, Tokio)
+        .with_batch_config(batch_config)
+        .build();
 
     let resource = Resource::builder()
-        .with_attributes(vec![
-            KeyValue::new("service.name", service_name),
-            KeyValue::new("service.version", "1.0.0"),
+        .with_attributes([
+            KeyValue::new(SERVICE_NAME, "weather-assistant-rust"),
+            KeyValue::new(SERVICE_VERSION, env!("CARGO_PKG_VERSION")),
         ])
         .build();
 
-    let langfuse_public_key = env::var("LANGFUSE_PUBLIC_KEY").ok();
-    let langfuse_secret_key = env::var("LANGFUSE_SECRET_KEY").ok();
-    let langfuse_host = env::var("LANGFUSE_HOST")
-        .or_else(|_| env::var("LANGFUSE_BASE_URL"))
-        .unwrap_or_else(|_| "http://localhost:3000".to_string());
+    let provider = SdkTracerProvider::builder()
+        .with_resource(resource)
+        .with_span_processor(span_processor)
+        .build();
 
-    let mut builder = SdkTracerProvider::builder()
-        .with_sampler(Sampler::AlwaysOn)
-        .with_id_generator(RandomIdGenerator::default())
-        .with_resource(resource);
+    let tracer = provider.tracer("weather-assistant");
 
-    if let (Some(public_key), Some(secret_key)) = (langfuse_public_key, langfuse_secret_key) {
-        let exporter = ExporterBuilder::new()
-            .with_host(&langfuse_host)
-            .with_basic_auth(&public_key, &secret_key)
-            .with_timeout(Duration::from_secs(10))
-            .build()?;
+    // Install the provider as global so other crates use it
+    global::set_tracer_provider(provider.clone());
 
-        // Use SimpleSpanProcessor instead of BatchSpanProcessor to avoid runtime issues
-        builder = builder.with_simple_exporter(exporter);
-    }
+    // Forward tracing events (including Tokio internal spans when enabled) to OTEL
+    // and keep console logging with env-based filtering.
+    let env_filter =
+        EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info,tokio=info"));
 
-    let provider = builder.build();
-    let tracer = provider.tracer("weather-assistant-rust");
-
-    global::set_tracer_provider(provider);
-
-    let telemetry_layer = tracing_opentelemetry::layer().with_tracer(tracer);
-
-    let filter_layer = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info"));
+    let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer);
+    let fmt_layer = fmt::layer()
+        .with_timer(UtcTime::rfc_3339())
+        .with_thread_ids(true)
+        .with_thread_names(true)
+        .with_target(true)
+        .with_span_events(FmtSpan::ENTER | FmtSpan::EXIT | FmtSpan::CLOSE);
 
     tracing_subscriber::registry()
-        .with(filter_layer)
-        .with(telemetry_layer)
-        .with(tracing_subscriber::fmt::layer())
+        .with(env_filter)
+        .with(fmt_layer)
+        .with(otel_layer)
         .init();
 
-    Ok(())
+    Ok(provider)
 }

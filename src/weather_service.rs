@@ -1,5 +1,5 @@
 use anyhow::Result;
-use opentelemetry::trace::{FutureExt, Tracer, TraceContextExt};
+use opentelemetry::trace::{FutureExt, TraceContextExt, Tracer};
 use opentelemetry::{global, KeyValue};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
@@ -36,7 +36,8 @@ impl WeatherService {
 
     #[instrument(skip(self))]
     pub async fn get_weather(&self, location: &str) -> Result<Weather> {
-        let span = self.tracer
+        let span = self
+            .tracer
             .span_builder("get_weather")
             .with_attributes(vec![
                 KeyValue::new("location", location.to_string()),
@@ -53,7 +54,8 @@ impl WeatherService {
             let weather = Weather {
                 location: location.to_string(),
                 temperature: rng.gen_range(15..=30),
-                condition: weather_conditions[rng.gen_range(0..weather_conditions.len())].to_string(),
+                condition: weather_conditions[rng.gen_range(0..weather_conditions.len())]
+                    .to_string(),
                 humidity: rng.gen_range(40..=80),
                 wind_speed: rng.gen_range(5..=25),
             };
@@ -66,7 +68,8 @@ impl WeatherService {
 
     #[instrument(skip(self))]
     pub async fn get_forecast(&self, location: &str, days: usize) -> Result<Vec<Forecast>> {
-        let span = self.tracer
+        let span = self
+            .tracer
             .span_builder("get_forecast")
             .with_attributes(vec![
                 KeyValue::new("location", location.to_string()),

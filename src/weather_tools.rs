@@ -1,19 +1,20 @@
+use rand::Rng;
 use rmcp::{
-    ErrorData as McpError, RoleServer, ServerHandler,
-    handler::server::{
-        router::tool::ToolRouter,
-        wrapper::Parameters,
-    },
+    handler::server::{router::tool::ToolRouter, wrapper::Parameters},
     model::*,
     schemars,
     service::RequestContext,
-    tool, tool_handler, tool_router,
+    tool, tool_handler, tool_router, ErrorData as McpError, RoleServer, ServerHandler,
 };
-use rand::Rng;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tracing::instrument;
+use opentelemetry::trace::TraceContextExt;
+use tracing::{debug, info, instrument};
+use tracing_opentelemetry::OpenTelemetrySpanExt;
+
+use crate::tracing_middleware::TraceParentContext;
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct GetWeatherArgs {
@@ -69,11 +70,26 @@ impl WeatherService {
     }
 
     #[tool(description = "Get current weather for a specified location")]
-    #[instrument(skip(self))]
+    #[instrument(skip(self, request_context, params), fields(location))]
     async fn get_weather(
         &self,
-        Parameters(args): Parameters<GetWeatherArgs>,
+        request_context: RequestContext<RoleServer>,
+        params: Parameters<GetWeatherArgs>,
     ) -> Result<CallToolResult, McpError> {
+        let Parameters(args) = params;
+        let parent_context = request_context
+            .extensions
+            .get::<TraceParentContext>()
+            .cloned();
+        let _context_guard = parent_context.as_ref().map(|ctx| {
+            tracing::Span::current().set_parent(ctx.0.clone());
+            ctx.0.clone().attach()
+        });
+        let otel_context = tracing::Span::current().context();
+        let trace_id = otel_context.span().span_context().trace_id();
+        info!(%trace_id, location = %args.location, "Handling get_weather request");
+        tracing::Span::current().record("location", &tracing::field::display(&args.location));
+
         let mut rng = rand::thread_rng();
         let weather_conditions = ["Sunny", "Cloudy", "Rainy", "Partly Cloudy"];
 
@@ -85,21 +101,36 @@ impl WeatherService {
             wind_speed: rng.gen_range(5..=25),
         };
 
-        let weather_json = serde_json::to_string(&weather)
-            .map_err(|e| McpError::new(ErrorCode::INTERNAL_ERROR, format!("Failed to serialize weather: {}", e), None))?;
-
-        Ok(CallToolResult::success(vec![Content::text(weather_json)]))
+        debug!(?weather, "Generated weather response");
+        Ok(CallToolResult::structured(json!(&weather)))
     }
 
     #[tool(description = "Get weather forecast for the specified location and number of days")]
-    #[instrument(skip(self))]
+    #[instrument(skip(self, request_context, params), fields(location, days))]
     async fn get_forecast(
         &self,
-        Parameters(args): Parameters<GetForecastArgs>,
+        request_context: RequestContext<RoleServer>,
+        params: Parameters<GetForecastArgs>,
     ) -> Result<CallToolResult, McpError> {
+        let Parameters(args) = params;
+        let parent_context = request_context
+            .extensions
+            .get::<TraceParentContext>()
+            .cloned();
+        let _context_guard = parent_context.as_ref().map(|ctx| {
+            tracing::Span::current().set_parent(ctx.0.clone());
+            ctx.0.clone().attach()
+        });
+        let otel_context = tracing::Span::current().context();
+        let trace_id = otel_context.span().span_context().trace_id();
+        info!(%trace_id, location = %args.location, requested_days = args.days, "Handling get_forecast request");
+        tracing::Span::current().record("location", &tracing::field::display(&args.location));
+        tracing::Span::current().record("days", &tracing::field::display(&args.days));
+
         let mut rng = rand::thread_rng();
         let conditions = ["Sunny", "Cloudy", "Rainy", "Stormy"];
         let days = args.days.min(7);
+        info!(location = %args.location, requested_days = args.days, effective_days = days, "Generating forecast");
 
         let forecast: Vec<Forecast> = (1..=days)
             .map(|day| Forecast {
@@ -111,10 +142,13 @@ impl WeatherService {
             })
             .collect();
 
-        let forecast_json = serde_json::to_string(&forecast)
-            .map_err(|e| McpError::new(ErrorCode::INTERNAL_ERROR, format!("Failed to serialize forecast: {}", e), None))?;
+        debug!(
+            forecast_len = forecast.len(),
+            ?forecast,
+            "Generated forecast response"
+        );
 
-        Ok(CallToolResult::success(vec![Content::text(forecast_json)]))
+        Ok(CallToolResult::structured(json!({ "items": forecast })))
     }
 }
 
