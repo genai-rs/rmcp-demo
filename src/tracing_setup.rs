@@ -1,6 +1,7 @@
+use anyhow::Context;
 use anyhow::Result;
 use opentelemetry::{global, trace::TracerProvider as _, KeyValue};
-use opentelemetry_langfuse::exporter_from_env;
+use opentelemetry_otlp::{HasExportConfig, SpanExporter};
 use opentelemetry_sdk::{
     propagation::TraceContextPropagator,
     resource::Resource,
@@ -11,7 +12,7 @@ use opentelemetry_sdk::{
     },
 };
 use opentelemetry_semantic_conventions::resource::{SERVICE_NAME, SERVICE_VERSION};
-use std::time::Duration;
+use std::{env, time::Duration};
 use tracing_subscriber::{
     fmt::{self, format::FmtSpan, time::UtcTime},
     layer::SubscriberExt,
@@ -25,7 +26,17 @@ pub fn init_tracing() -> Result<SdkTracerProvider> {
     // Ensure trace context propagation (e.g. W3C traceparent headers).
     global::set_text_map_propagator(TraceContextPropagator::new());
 
-    let exporter = exporter_from_env()?;
+    let traces_endpoint = env::var("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
+        .or_else(|_| {
+            env::var("OTEL_EXPORTER_OTLP_ENDPOINT").map(|endpoint| format!("{endpoint}/v1/traces"))
+        })
+        .unwrap_or_else(|_| "http://localhost:4318/v1/traces".to_string());
+
+    let mut exporter_builder = SpanExporter::builder().with_http();
+    exporter_builder.export_config().endpoint = Some(traces_endpoint);
+    let exporter = exporter_builder
+        .build()
+        .context("failed to build OTLP trace exporter")?;
 
     let batch_config = BatchConfigBuilder::default()
         .with_max_queue_size(2048)

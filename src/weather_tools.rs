@@ -1,3 +1,4 @@
+use opentelemetry::trace::TraceContextExt;
 use rand::Rng;
 use rmcp::{
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
@@ -10,7 +11,6 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use opentelemetry::trace::TraceContextExt;
 use tracing::{debug, info, instrument};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 

@@ -1,12 +1,12 @@
-# Rust MCP HTTP Server with OpenTelemetry and Langfuse
+# Rust MCP HTTP Server with OpenTelemetry and Jaeger
 
-This repository demonstrates a Rust implementation of an MCP (Model Context Protocol) HTTP server with distributed tracing using OpenTelemetry and Langfuse, designed to work with FastMCP Python clients.
+This repository demonstrates a Rust implementation of an MCP (Model Context Protocol) HTTP server with distributed tracing using OpenTelemetry and Jaeger (via OTLP), designed to work with FastMCP Python clients. The Python client can optionally forward traces to Langfuse for LLM observability.
 
 ## Features
 
 - 🦀 **Rust MCP HTTP Server**: JSON-RPC implementation compatible with FastMCP clients
 - 🔍 **Distributed Tracing**: OpenTelemetry integration for trace propagation
-- 📊 **Langfuse Integration**: LLM observability with token usage and latency tracking
+- 📊 **Jaeger Integration**: OTLP exporter targets Jaeger by default (with optional Langfuse support on the Python side)
 - 🎨 **Streamlit Frontend**: Python client application (from the original implementation)
 - 🌤️ **Weather Tools**: Example MCP tools for weather data
 
@@ -32,7 +32,7 @@ The official `rmcp` crate is designed for stdio-based communication, which works
 - Rust (latest stable)
 - Python 3.10+ (managed via `uv`)
 - [uv](https://github.com/astral-sh/uv) - Fast Python package installer and resolver
-- Langfuse instance (local or cloud)
+- Jaeger all-in-one instance (local via Docker or remote)
 
 ### Installation
 
@@ -67,6 +67,19 @@ cargo run
 
 The server will start on `http://localhost:8001/weather`
 
+### Run Jaeger Locally (optional)
+
+```bash
+docker run -d --name jaeger --restart unless-stopped \
+  -e COLLECTOR_OTLP_ENABLED=true \
+  -p 16686:16686 \
+  -p 14268:14268 \
+  -p 4318:4318 \
+  jaegertracing/all-in-one:1.56
+```
+
+Open the Jaeger UI at <http://localhost:16686>. Configure `OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318` (or the traces endpoint) before starting the Rust server or Python CLI to push spans into Jaeger.
+
 ### Start the Python Client
 
 ```bash
@@ -77,11 +90,11 @@ uv run streamlit run weather_assistant/client.py
 
 ### Environment Variables
 
-- `LANGFUSE_PUBLIC_KEY`: Your Langfuse public key
-- `LANGFUSE_SECRET_KEY`: Your Langfuse secret key
-- `LANGFUSE_HOST`: Langfuse host URL (default: `http://localhost:3000`)
-- `OTEL_SERVICE_NAME`: Service name for traces (default: `weather-assistant-rust`)
-- `OPENAI_API_KEY`: OpenAI API key for the client
+- `OTEL_EXPORTER_OTLP_ENDPOINT`: Base OTLP endpoint (default: `http://localhost:4318`). Set to your Jaeger collector.
+- `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT`: Full traces endpoint (overrides the base endpoint).
+- `OTEL_SERVICE_NAME`: Service name for traces (default: `weather-assistant-rust`).
+- `OPENAI_API_KEY`: OpenAI API key for the client (optional).
+- `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_HOST`: Optional keys for the Python client if you still want to mirror traces into Langfuse.
 
 ## How It Works
 
@@ -90,7 +103,7 @@ uv run streamlit run weather_assistant/client.py
 1. The Streamlit client creates a trace context and injects it into HTTP headers
 2. The Rust server extracts the trace context from headers
 3. All operations are tracked as spans under the parent trace
-4. Traces are exported to Langfuse for visualization
+4. Traces are exported to Jaeger (and optionally Langfuse on the Python side) for visualization
 
 ### MCP Protocol
 
@@ -120,8 +133,8 @@ cargo build --release
 - **rmcp**: Official Rust MCP SDK with HTTP transport support via StreamableHttpService
 - **Axum**: High-performance async web framework for the HTTP server
 - **Tower**: Middleware for CORS and other HTTP concerns
-- **OpenTelemetry SDK**: Direct integration with SimpleSpanProcessor for synchronous export
-- **Langfuse Exporter**: Native Rust implementation for LLM observability
+- **OpenTelemetry SDK**: Batched OTLP exporter for asynchronous export to Jaeger
+- **Jaeger**: Default backend for trace visualization (via OTLP HTTP)
 
 ## License
 
