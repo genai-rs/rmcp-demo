@@ -1,16 +1,15 @@
-"""Configure OpenTelemetry, Langfuse, and optional Jaeger exports."""
+"""Configure OpenTelemetry and Langfuse integration."""
 
 from __future__ import annotations
 
+import logging
 import os
 from typing import Optional
 
 from langfuse import Langfuse
 from opentelemetry import propagate, trace
-from opentelemetry.exporter.jaeger.thrift import JaegerExporter
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
-from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
 
@@ -18,31 +17,18 @@ _LANGFUSE_CLIENT: Optional[Langfuse] = None
 _TRACING_INITIALIZED = False
 
 
-def _build_jaeger_exporter() -> Optional[JaegerExporter]:
-    """Create a Jaeger exporter when configuration is provided."""
-
-    endpoint = os.getenv("JAEGER_ENDPOINT")
-    if endpoint:
-        return JaegerExporter(
-            collector_endpoint=endpoint,
-            username=os.getenv("JAEGER_USERNAME"),
-            password=os.getenv("JAEGER_PASSWORD"),
-        )
-
-    agent_host = os.getenv("JAEGER_AGENT_HOST")
-    if agent_host:
-        agent_port = int(os.getenv("JAEGER_AGENT_PORT", "6831"))
-        return JaegerExporter(agent_host_name=agent_host, agent_port=agent_port)
-
-    return None
-
-
 def setup_tracing():
-    """Configure OpenTelemetry, Langfuse, and optional Jaeger export."""
+    """Configure OpenTelemetry with Langfuse integration."""
 
     global _LANGFUSE_CLIENT, _TRACING_INITIALIZED
 
     if _TRACING_INITIALIZED:
+        return _LANGFUSE_CLIENT
+
+    # Check if TracerProvider is already set by Langfuse SDK
+    if trace.get_tracer_provider() is not trace.ProxyTracerProvider():
+        # Tracing already initialized
+        _TRACING_INITIALIZED = True
         return _LANGFUSE_CLIENT
 
     resource = Resource.create(
@@ -53,24 +39,29 @@ def setup_tracing():
     )
 
     provider = TracerProvider(resource=resource)
-
-    jaeger_exporter = _build_jaeger_exporter()
-    if jaeger_exporter is not None:
-        provider.add_span_processor(BatchSpanProcessor(jaeger_exporter))
-
     trace.set_tracer_provider(provider)
 
-    # Set up W3C TraceContext propagator (standard format)
-    propagate.set_global_textmap(TraceContextTextMapPropagator())
-
+    # Get Langfuse configuration
     public_key = os.getenv("LANGFUSE_PUBLIC_KEY")
     secret_key = os.getenv("LANGFUSE_SECRET_KEY")
     host = os.getenv("LANGFUSE_HOST", os.getenv("LANGFUSE_BASE_URL", "http://localhost:3000"))
 
+    # Set up Langfuse client
+    # The Langfuse SDK v3 automatically integrates with OpenTelemetry when initialized
     if public_key and secret_key:
-        _LANGFUSE_CLIENT = Langfuse(public_key=public_key, secret_key=secret_key, host=host)
+        _LANGFUSE_CLIENT = Langfuse(
+            public_key=public_key,
+            secret_key=secret_key,
+            host=host,
+            debug=os.getenv("LANGFUSE_DEBUG", "false").lower() == "true"
+        )
+        logger = logging.getLogger(__name__)
+        logger.info(f"Langfuse client initialized for {host}")
     else:
         _LANGFUSE_CLIENT = None
+
+    # Set up W3C TraceContext propagator (standard format)
+    propagate.set_global_textmap(TraceContextTextMapPropagator())
 
     _TRACING_INITIALIZED = True
     return _LANGFUSE_CLIENT
