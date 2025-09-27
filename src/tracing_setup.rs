@@ -2,9 +2,7 @@ use anyhow::Result;
 use opentelemetry::{global, trace::TracerProvider as _, KeyValue};
 use opentelemetry_langfuse::async_export::AsyncRuntimeExporter;
 use opentelemetry_sdk::{
-    propagation::TraceContextPropagator,
-    resource::Resource,
-    trace::SdkTracerProvider,
+    propagation::TraceContextPropagator, resource::Resource, trace::SdkTracerProvider,
 };
 use opentelemetry_semantic_conventions::resource::{SERVICE_NAME, SERVICE_VERSION};
 use std::env;
@@ -24,13 +22,19 @@ impl<S> Filter<S> for RmcpSpanFilter
 where
     S: Subscriber,
 {
-    fn enabled(&self, meta: &Metadata<'_>, _cx: &tracing_subscriber::layer::Context<'_, S>) -> bool {
+    fn enabled(
+        &self,
+        meta: &Metadata<'_>,
+        _cx: &tracing_subscriber::layer::Context<'_, S>,
+    ) -> bool {
         // Filter out rmcp internal spans that don't propagate trace context properly
         let name = meta.name();
         let target = meta.target();
 
         // Exclude serve_inner and streamable_http_session spans from rmcp
-        if target.starts_with("rmcp") && (name == "serve_inner" || name == "streamable_http_session") {
+        if target.starts_with("rmcp")
+            && (name == "serve_inner" || name == "streamable_http_session")
+        {
             return false;
         }
 

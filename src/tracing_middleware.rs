@@ -78,10 +78,8 @@ where
             // If response has mcp-session-id header, store the trace context
             if let Some(session_id) = response.headers().get("mcp-session-id") {
                 if let Ok(session_str) = session_id.to_str() {
-                    trace_store::store_trace_context(
-                        session_str.to_string(),
-                        parent_context_clone
-                    ).await;
+                    trace_store::store_trace_context(session_str.to_string(), parent_context_clone)
+                        .await;
                     tracing::info!("Stored trace context for session: {}", session_str);
                 }
             }

@@ -100,7 +100,7 @@ impl WeatherService {
             "Handling get_weather request"
         );
 
-        tracing::Span::current().record("location", &tracing::field::display(&args.location));
+        tracing::Span::current().record("location", tracing::field::display(&args.location));
 
         let mut rng = rand::thread_rng();
         let weather_conditions = ["Sunny", "Cloudy", "Rainy", "Partly Cloudy"];
@@ -149,8 +149,8 @@ impl WeatherService {
             "Handling get_forecast request"
         );
 
-        tracing::Span::current().record("location", &tracing::field::display(&args.location));
-        tracing::Span::current().record("days", &tracing::field::display(&args.days));
+        tracing::Span::current().record("location", tracing::field::display(&args.location));
+        tracing::Span::current().record("days", tracing::field::display(&args.days));
 
         let mut rng = rand::thread_rng();
         let conditions = ["Sunny", "Cloudy", "Rainy", "Stormy"];
