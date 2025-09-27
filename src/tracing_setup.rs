@@ -1,18 +1,13 @@
-use anyhow::Context;
 use anyhow::Result;
 use opentelemetry::{global, trace::TracerProvider as _, KeyValue};
-use opentelemetry_otlp::{HasExportConfig, SpanExporter};
+use opentelemetry_langfuse::async_export::AsyncRuntimeExporter;
 use opentelemetry_sdk::{
     propagation::TraceContextPropagator,
     resource::Resource,
-    runtime::TokioCurrentThread,
-    trace::{
-        span_processor_with_async_runtime::BatchSpanProcessor as AsyncBatchSpanProcessor,
-        BatchConfigBuilder, SdkTracerProvider,
-    },
+    trace::SdkTracerProvider,
 };
 use opentelemetry_semantic_conventions::resource::{SERVICE_NAME, SERVICE_VERSION};
-use std::{env, time::Duration};
+use std::env;
 use tracing_subscriber::{
     fmt::{self, format::FmtSpan, time::UtcTime},
     layer::SubscriberExt,
@@ -26,27 +21,7 @@ pub fn init_tracing() -> Result<SdkTracerProvider> {
     // Ensure trace context propagation (e.g. W3C traceparent headers).
     global::set_text_map_propagator(TraceContextPropagator::new());
 
-    let traces_endpoint = env::var("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT")
-        .or_else(|_| {
-            env::var("OTEL_EXPORTER_OTLP_ENDPOINT").map(|endpoint| format!("{endpoint}/v1/traces"))
-        })
-        .unwrap_or_else(|_| "http://localhost:4318/v1/traces".to_string());
-
-    let mut exporter_builder = SpanExporter::builder().with_http();
-    exporter_builder.export_config().endpoint = Some(traces_endpoint);
-    let exporter = exporter_builder
-        .build()
-        .context("failed to build OTLP trace exporter")?;
-
-    let batch_config = BatchConfigBuilder::default()
-        .with_max_queue_size(2048)
-        .with_scheduled_delay(Duration::from_millis(200))
-        .build();
-
-    let span_processor = AsyncBatchSpanProcessor::builder(exporter, TokioCurrentThread)
-        .with_batch_config(batch_config)
-        .build();
-
+    // Build the resource with service information
     let resource = Resource::builder()
         .with_attributes([
             KeyValue::new(SERVICE_NAME, "weather-assistant-rust"),
@@ -54,9 +29,15 @@ pub fn init_tracing() -> Result<SdkTracerProvider> {
         ])
         .build();
 
+    // Create the async-safe exporter from opentelemetry-langfuse
+    // This automatically configures from LANGFUSE_* environment variables
+    // and ensures proper async runtime support to avoid "no reactor running" panics
+    let exporter = AsyncRuntimeExporter::from_env()?;
+
+    // Build the tracer provider with batch processing
     let provider = SdkTracerProvider::builder()
         .with_resource(resource)
-        .with_span_processor(span_processor)
+        .with_batch_exporter(exporter)
         .build();
 
     let tracer = provider.tracer("weather-assistant");
