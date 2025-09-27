@@ -42,7 +42,7 @@ async fn main() -> Result<()> {
     // Create the router with the MCP service at /weather endpoint
     let router = Router::new()
         .nest_service("/weather", service)
-        .layer(TracePropagationLayer::default())
+        .layer(TracePropagationLayer)
         .layer(CorsLayer::permissive());
 
     // Start the server
