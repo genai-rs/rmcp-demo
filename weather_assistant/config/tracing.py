@@ -6,11 +6,12 @@ import os
 from typing import Optional
 
 from langfuse import Langfuse
-from opentelemetry import trace
+from opentelemetry import propagate, trace
 from opentelemetry.exporter.jaeger.thrift import JaegerExporter
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
 
 
 _LANGFUSE_CLIENT: Optional[Langfuse] = None
@@ -58,6 +59,9 @@ def setup_tracing():
         provider.add_span_processor(BatchSpanProcessor(jaeger_exporter))
 
     trace.set_tracer_provider(provider)
+
+    # Set up W3C TraceContext propagator (standard format)
+    propagate.set_global_textmap(TraceContextTextMapPropagator())
 
     public_key = os.getenv("LANGFUSE_PUBLIC_KEY")
     secret_key = os.getenv("LANGFUSE_SECRET_KEY")

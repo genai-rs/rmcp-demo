@@ -14,7 +14,7 @@ use tokio::sync::Mutex;
 use tracing::{debug, info, instrument};
 use tracing_opentelemetry::OpenTelemetrySpanExt;
 
-use crate::tracing_middleware::TraceParentContext;
+use crate::trace_store;
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct GetWeatherArgs {
@@ -70,24 +70,36 @@ impl WeatherService {
     }
 
     #[tool(description = "Get current weather for a specified location")]
-    #[instrument(skip(self, request_context, params), fields(location))]
+    #[instrument(skip(self, _request_context, params), fields(location))]
     async fn get_weather(
         &self,
-        request_context: RequestContext<RoleServer>,
+        _request_context: RequestContext<RoleServer>,
         params: Parameters<GetWeatherArgs>,
     ) -> Result<CallToolResult, McpError> {
         let Parameters(args) = params;
-        let parent_context = request_context
-            .extensions
-            .get::<TraceParentContext>()
-            .cloned();
-        let _context_guard = parent_context.as_ref().map(|ctx| {
-            tracing::Span::current().set_parent(ctx.0.clone());
-            ctx.0.clone().attach()
-        });
+
+        // Try to get stored trace context
+        let stored_context = trace_store::get_current_trace_context().await;
+
+        // Attach the stored context if available
+        if let Some(ctx) = stored_context {
+            tracing::Span::current().set_parent(ctx);
+        }
+
+        // Log the current span info
         let otel_context = tracing::Span::current().context();
-        let trace_id = otel_context.span().span_context().trace_id();
-        info!(%trace_id, location = %args.location, "Handling get_weather request");
+        let span = otel_context.span();
+        let span_context = span.span_context();
+        let trace_id = span_context.trace_id();
+
+        info!(
+            %trace_id,
+            location = %args.location,
+            span_id = %span_context.span_id(),
+            is_sampled = span_context.is_sampled(),
+            "Handling get_weather request"
+        );
+
         tracing::Span::current().record("location", &tracing::field::display(&args.location));
 
         let mut rng = rand::thread_rng();
@@ -106,24 +118,37 @@ impl WeatherService {
     }
 
     #[tool(description = "Get weather forecast for the specified location and number of days")]
-    #[instrument(skip(self, request_context, params), fields(location, days))]
+    #[instrument(skip(self, _request_context, params), fields(location, days))]
     async fn get_forecast(
         &self,
-        request_context: RequestContext<RoleServer>,
+        _request_context: RequestContext<RoleServer>,
         params: Parameters<GetForecastArgs>,
     ) -> Result<CallToolResult, McpError> {
         let Parameters(args) = params;
-        let parent_context = request_context
-            .extensions
-            .get::<TraceParentContext>()
-            .cloned();
-        let _context_guard = parent_context.as_ref().map(|ctx| {
-            tracing::Span::current().set_parent(ctx.0.clone());
-            ctx.0.clone().attach()
-        });
+
+        // Try to get stored trace context
+        let stored_context = trace_store::get_current_trace_context().await;
+
+        // Attach the stored context if available
+        if let Some(ctx) = stored_context {
+            tracing::Span::current().set_parent(ctx);
+        }
+
+        // Log the current span info
         let otel_context = tracing::Span::current().context();
-        let trace_id = otel_context.span().span_context().trace_id();
-        info!(%trace_id, location = %args.location, requested_days = args.days, "Handling get_forecast request");
+        let span = otel_context.span();
+        let span_context = span.span_context();
+        let trace_id = span_context.trace_id();
+
+        info!(
+            %trace_id,
+            location = %args.location,
+            requested_days = args.days,
+            span_id = %span_context.span_id(),
+            is_sampled = span_context.is_sampled(),
+            "Handling get_forecast request"
+        );
+
         tracing::Span::current().record("location", &tracing::field::display(&args.location));
         tracing::Span::current().record("days", &tracing::field::display(&args.days));
 

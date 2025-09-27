@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 # MCP SDK with HTTP transport support
-rmcp = { git = "https://github.com/modelcontextprotocol/rust-sdk", branch = "main", features = ["server", "transport-streamable-http-server"] }
+rmcp = { version = "0.7", features = ["server", "transport-streamable-http-server"] }
 schemars = "0.8"
 
 # Async runtime
@@ -44,3 +44,6 @@ dotenv = "0.15"
 # Error handling
 anyhow = "1.0"
 thiserror = "2.0"
+
+# Utils
+once_cell = "1.19"
