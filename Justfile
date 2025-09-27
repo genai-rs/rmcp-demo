@@ -4,5 +4,5 @@ rmcp:
 watch:
      cargo watch -x run -w src
 
-cli:
-    uv run python weather_assistant/cli.py ny
+cli location="Brussels":
+    uv run python weather_assistant/cli.py "{{location}}"
