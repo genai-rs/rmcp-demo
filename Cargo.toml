@@ -25,7 +25,8 @@ opentelemetry = "0.30"
 opentelemetry_sdk = { version = "0.30", features = ["trace", "experimental_async_runtime", "experimental_trace_batch_span_processor_with_async_runtime", "rt-tokio", "rt-tokio-current-thread"] }
 opentelemetry-http = "0.30"
 opentelemetry-semantic-conventions = "0.30"
-opentelemetry-otlp = { version = "0.30", default-features = false, features = ["trace", "http-proto", "hyper-client"] }
+opentelemetry-otlp = { version = "0.30", default-features = false, features = ["trace", "http-proto", "reqwest-client"] }
+opentelemetry-langfuse = { path = "/Users/tim.van.wassenhove/src/github/opentelemetry-langfuse", features = ["experimental_async"] }
 
 # Tracing
 tracing = "0.1"
