@@ -23,7 +23,7 @@ const BIND_ADDRESS: &str = "0.0.0.0:8001";
 async fn main() -> Result<()> {
     dotenv().ok();
 
-    // Initialize tracing with OpenTelemetry (exported via OTLP to Jaeger)
+    // Initialize tracing with OpenTelemetry
     let tracer_provider = init_tracing()?;
 
     info!(
