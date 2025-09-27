@@ -8,10 +8,10 @@ use std::time::Duration;
 use tower_http::cors::CorsLayer;
 use tracing::info;
 
+mod trace_store;
 mod tracing_middleware;
 mod tracing_setup;
-mod weather_service;
-mod weather_tools; // Keep for the old tracing stuff if needed
+mod weather_tools;
 
 use crate::tracing_setup::init_tracing;
 use crate::weather_tools::WeatherService;

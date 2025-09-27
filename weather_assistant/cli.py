@@ -63,6 +63,9 @@ async def handle_weather_request(
     carrier: dict[str, str] = {}
     inject(carrier)
 
+    # Debug: Log the trace headers being sent
+    logger.debug("Trace headers being sent: %s", carrier)
+
     # Create transport with trace context headers
     transport = StreamableHttpTransport(url=backend_url, headers=carrier)
 
