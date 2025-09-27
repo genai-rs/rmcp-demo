@@ -70,7 +70,10 @@ impl WeatherService {
     }
 
     #[tool(description = "Get current weather for a specified location")]
-    #[instrument(skip(self, _request_context, params), fields(location))]
+    #[instrument(skip(self, _request_context, params), fields(
+        input = tracing::field::Empty,
+        output = tracing::field::Empty
+    ))]
     async fn get_weather(
         &self,
         _request_context: RequestContext<RoleServer>,
@@ -86,6 +89,12 @@ impl WeatherService {
             tracing::Span::current().set_parent(ctx);
         }
 
+        // Record input parameters as span attribute
+        let input_json = json!({
+            "location": &args.location
+        });
+        tracing::Span::current().record("input", tracing::field::display(&input_json.to_string()));
+
         // Log the current span info
         let otel_context = tracing::Span::current().context();
         let span = otel_context.span();
@@ -100,8 +109,6 @@ impl WeatherService {
             "Handling get_weather request"
         );
 
-        tracing::Span::current().record("location", tracing::field::display(&args.location));
-
         let mut rng = rand::thread_rng();
         let weather_conditions = ["Sunny", "Cloudy", "Rainy", "Partly Cloudy"];
 
@@ -113,12 +120,19 @@ impl WeatherService {
             wind_speed: rng.gen_range(5..=25),
         };
 
+        // Record output as span attribute
+        let output_json = json!(&weather);
+        tracing::Span::current().record("output", tracing::field::display(&output_json.to_string()));
+
         debug!(?weather, "Generated weather response");
-        Ok(CallToolResult::structured(json!(&weather)))
+        Ok(CallToolResult::structured(output_json))
     }
 
     #[tool(description = "Get weather forecast for the specified location and number of days")]
-    #[instrument(skip(self, _request_context, params), fields(location, days))]
+    #[instrument(skip(self, _request_context, params), fields(
+        input = tracing::field::Empty,
+        output = tracing::field::Empty
+    ))]
     async fn get_forecast(
         &self,
         _request_context: RequestContext<RoleServer>,
@@ -133,6 +147,13 @@ impl WeatherService {
         if let Some(ctx) = stored_context {
             tracing::Span::current().set_parent(ctx);
         }
+
+        // Record input parameters as span attribute
+        let input_json = json!({
+            "location": &args.location,
+            "days": args.days
+        });
+        tracing::Span::current().record("input", tracing::field::display(&input_json.to_string()));
 
         // Log the current span info
         let otel_context = tracing::Span::current().context();
@@ -149,9 +170,6 @@ impl WeatherService {
             "Handling get_forecast request"
         );
 
-        tracing::Span::current().record("location", tracing::field::display(&args.location));
-        tracing::Span::current().record("days", tracing::field::display(&args.days));
-
         let mut rng = rand::thread_rng();
         let conditions = ["Sunny", "Cloudy", "Rainy", "Stormy"];
         let days = args.days.min(7);
@@ -167,13 +185,17 @@ impl WeatherService {
             })
             .collect();
 
+        // Record output as span attribute
+        let output_json = json!({ "items": forecast });
+        tracing::Span::current().record("output", tracing::field::display(&output_json.to_string()));
+
         debug!(
             forecast_len = forecast.len(),
             ?forecast,
             "Generated forecast response"
         );
 
-        Ok(CallToolResult::structured(json!({ "items": forecast })))
+        Ok(CallToolResult::structured(output_json))
     }
 }
 
