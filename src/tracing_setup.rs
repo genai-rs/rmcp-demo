@@ -8,12 +8,35 @@ use opentelemetry_sdk::{
 };
 use opentelemetry_semantic_conventions::resource::{SERVICE_NAME, SERVICE_VERSION};
 use std::env;
+use tracing::{Metadata, Subscriber};
 use tracing_subscriber::{
     fmt::{self, format::FmtSpan, time::UtcTime},
-    layer::SubscriberExt,
+    layer::{Filter, SubscriberExt},
     util::SubscriberInitExt,
-    EnvFilter,
+    EnvFilter, Layer,
 };
+
+/// Filter to exclude rmcp library internal spans that don't have proper parent context
+#[derive(Debug, Clone)]
+struct RmcpSpanFilter;
+
+impl<S> Filter<S> for RmcpSpanFilter
+where
+    S: Subscriber,
+{
+    fn enabled(&self, meta: &Metadata<'_>, _cx: &tracing_subscriber::layer::Context<'_, S>) -> bool {
+        // Filter out rmcp internal spans that don't propagate trace context properly
+        let name = meta.name();
+        let target = meta.target();
+
+        // Exclude serve_inner and streamable_http_session spans from rmcp
+        if target.starts_with("rmcp") && (name == "serve_inner" || name == "streamable_http_session") {
+            return false;
+        }
+
+        true
+    }
+}
 
 /// Initialise tracing so that `tracing` spans (including Tokio runtime spans)
 /// are forwarded to the configured OpenTelemetry exporter and to stdout.
@@ -50,7 +73,11 @@ pub fn init_tracing() -> Result<SdkTracerProvider> {
     let env_filter =
         EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info,tokio=info"));
 
-    let otel_layer = tracing_opentelemetry::layer().with_tracer(tracer);
+    // Apply the filter to the OpenTelemetry layer to exclude unwanted rmcp spans
+    let otel_layer = tracing_opentelemetry::layer()
+        .with_tracer(tracer)
+        .with_filter(RmcpSpanFilter);
+
     let fmt_layer = fmt::layer()
         .with_timer(UtcTime::rfc_3339())
         .with_thread_ids(true)
