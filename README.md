@@ -4,11 +4,11 @@ This repository demonstrates a Rust implementation of an MCP (Model Context Prot
 
 ## Features
 
-- 🦀 **Rust MCP HTTP Server**: JSON-RPC implementation compatible with FastMCP clients
-- 🔍 **Distributed Tracing**: OpenTelemetry integration for trace propagation
-- 📊 **Langfuse Integration**: OpenTelemetry traces are sent to Langfuse for LLM observability
-- 🎨 **Streamlit Frontend**: Python client application (from the original implementation)
-- 🌤️ **Weather Tools**: Example MCP tools for weather data
+- **Rust MCP HTTP server**: JSON-RPC implementation compatible with FastMCP clients
+- **Distributed tracing**: OpenTelemetry integration for trace propagation
+- **Langfuse integration**: exported traces for LLM observability
+- **Streamlit frontend**: Python client application (from the original implementation)
+- **Weather tools**: example MCP tools for weather data
 
 ## Architecture
 
