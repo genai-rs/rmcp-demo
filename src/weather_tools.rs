@@ -1,4 +1,3 @@
-use opentelemetry::trace::TraceContextExt;
 use rand::Rng;
 use rmcp::{
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
@@ -12,9 +11,6 @@ use serde_json::json;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::{debug, info, instrument};
-use tracing_opentelemetry::OpenTelemetrySpanExt;
-
-use crate::trace_store;
 
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
 pub struct GetWeatherArgs {
@@ -79,35 +75,10 @@ impl WeatherService {
         _request_context: RequestContext<RoleServer>,
         params: Parameters<GetWeatherArgs>,
     ) -> Result<CallToolResult, McpError> {
-        let Parameters(args) = params;
+        // One line: extract args and setup tracing
+        let args = crate::trace_utils::trace_rmcp_setup(params).await;
 
-        // Try to get stored trace context
-        let stored_context = trace_store::get_current_trace_context().await;
-
-        // Attach the stored context if available
-        if let Some(ctx) = stored_context {
-            tracing::Span::current().set_parent(ctx);
-        }
-
-        // Record input parameters as span attribute
-        let input_json = json!({
-            "location": &args.location
-        });
-        tracing::Span::current().record("input", tracing::field::display(&input_json.to_string()));
-
-        // Log the current span info
-        let otel_context = tracing::Span::current().context();
-        let span = otel_context.span();
-        let span_context = span.span_context();
-        let trace_id = span_context.trace_id();
-
-        info!(
-            %trace_id,
-            location = %args.location,
-            span_id = %span_context.span_id(),
-            is_sampled = span_context.is_sampled(),
-            "Handling get_weather request"
-        );
+        info!(location = %args.location, "Handling get_weather request");
 
         let mut rng = rand::thread_rng();
         let weather_conditions = ["Sunny", "Cloudy", "Rainy", "Partly Cloudy"];
@@ -120,12 +91,10 @@ impl WeatherService {
             wind_speed: rng.gen_range(5..=25),
         };
 
-        // Record output as span attribute
-        let output_json = json!(&weather);
-        tracing::Span::current().record("output", tracing::field::display(&output_json.to_string()));
-
         debug!(?weather, "Generated weather response");
-        Ok(CallToolResult::structured(output_json))
+
+        // One line: record output and return
+        crate::trace_utils::trace_rmcp_result(weather)
     }
 
     #[tool(description = "Get weather forecast for the specified location and number of days")]
@@ -138,42 +107,18 @@ impl WeatherService {
         _request_context: RequestContext<RoleServer>,
         params: Parameters<GetForecastArgs>,
     ) -> Result<CallToolResult, McpError> {
-        let Parameters(args) = params;
-
-        // Try to get stored trace context
-        let stored_context = trace_store::get_current_trace_context().await;
-
-        // Attach the stored context if available
-        if let Some(ctx) = stored_context {
-            tracing::Span::current().set_parent(ctx);
-        }
-
-        // Record input parameters as span attribute
-        let input_json = json!({
-            "location": &args.location,
-            "days": args.days
-        });
-        tracing::Span::current().record("input", tracing::field::display(&input_json.to_string()));
-
-        // Log the current span info
-        let otel_context = tracing::Span::current().context();
-        let span = otel_context.span();
-        let span_context = span.span_context();
-        let trace_id = span_context.trace_id();
+        // One line: extract args and setup tracing
+        let args = crate::trace_utils::trace_rmcp_setup(params).await;
 
         info!(
-            %trace_id,
             location = %args.location,
             requested_days = args.days,
-            span_id = %span_context.span_id(),
-            is_sampled = span_context.is_sampled(),
             "Handling get_forecast request"
         );
 
         let mut rng = rand::thread_rng();
         let conditions = ["Sunny", "Cloudy", "Rainy", "Stormy"];
         let days = args.days.min(7);
-        info!(location = %args.location, requested_days = args.days, effective_days = days, "Generating forecast");
 
         let forecast: Vec<Forecast> = (1..=days)
             .map(|day| Forecast {
@@ -185,17 +130,14 @@ impl WeatherService {
             })
             .collect();
 
-        // Record output as span attribute
-        let output_json = json!({ "items": forecast });
-        tracing::Span::current().record("output", tracing::field::display(&output_json.to_string()));
-
         debug!(
             forecast_len = forecast.len(),
             ?forecast,
             "Generated forecast response"
         );
 
-        Ok(CallToolResult::structured(output_json))
+        // One line: record output and return
+        crate::trace_utils::trace_rmcp_result(json!({ "items": forecast }))
     }
 }
 

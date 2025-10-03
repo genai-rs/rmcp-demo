@@ -9,6 +9,7 @@ use tower_http::cors::CorsLayer;
 use tracing::info;
 
 mod trace_store;
+mod trace_utils;
 mod tracing_middleware;
 mod tracing_setup;
 mod weather_tools;
