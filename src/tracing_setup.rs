@@ -1,6 +1,6 @@
 use anyhow::Result;
 use opentelemetry::{global, trace::TracerProvider as _, KeyValue};
-use opentelemetry_langfuse::async_export::AsyncRuntimeExporter;
+use opentelemetry_langfuse::ExporterBuilder;
 use opentelemetry_sdk::{
     propagation::TraceContextPropagator, resource::Resource, trace::SdkTracerProvider,
 };
@@ -56,10 +56,9 @@ pub fn init_tracing() -> Result<SdkTracerProvider> {
         ])
         .build();
 
-    // Create the async-safe exporter from opentelemetry-langfuse
-    // This automatically configures from LANGFUSE_* environment variables
-    // and ensures proper async runtime support to avoid "no reactor running" panics
-    let exporter = AsyncRuntimeExporter::from_env()?;
+    // Create the Langfuse exporter from environment configuration
+    // This automatically wires up credentials and endpoint via LANGFUSE_* vars
+    let exporter = ExporterBuilder::from_env()?.build()?;
 
     // Build the tracer provider with batch processing
     let provider = SdkTracerProvider::builder()
