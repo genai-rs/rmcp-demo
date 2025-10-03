@@ -61,7 +61,8 @@ where
         });
 
         // Set current span parent
-        tracing::Span::current().set_parent(parent_context.clone());
+        // Ignore failure if the span context is already closed
+        let _ = tracing::Span::current().set_parent(parent_context.clone());
 
         // Store in request extensions for immediate use
         req.extensions_mut()

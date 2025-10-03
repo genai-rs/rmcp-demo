@@ -12,13 +12,13 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tracing::{debug, info, instrument};
 
-#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
 pub struct GetWeatherArgs {
     /// City name to get weather for
     pub location: String,
 }
 
-#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[derive(Debug, Deserialize, Serialize, schemars::JsonSchema)]
 pub struct GetForecastArgs {
     /// City name for forecast
     pub location: String,
